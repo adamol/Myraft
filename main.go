@@ -1,19 +1,15 @@
 package main
 
 import (
-	"github.com/gorilla/mux"
-	"net/http"
-	"log"
 	"flag"
-	"fmt"
-	"myraft/appendentries"
-	"myraft/requestvote"
 	"myraft/join"
+	"myraft/clusterstate"
+	"myraft/state"
 	"myraft/shared"
-	"encoding/json"
 )
 
-var nodeInfo shared.NodeInfo
+var nodeInfo *state.NodeInfo
+var logger *shared.Logger
 
 /**
 * go run main.go --at 127.0.0.1:8080
@@ -21,41 +17,40 @@ var nodeInfo shared.NodeInfo
 */
 func init() {
 	selfInfo := flag.String("at", "127.0.0.1:8080", "default port")
+	serverName := flag.String("as", "foobar", "default serverName")
 	leaderInfo := flag.String("join", "", "default host")
 
 	flag.Parse()
 
-	fmt.Println(fmt.Sprintf("'at' flag parsed as %v", *selfInfo))
-	fmt.Println(fmt.Sprintf("'join' flag parsed as %v", *leaderInfo))
+	nodeInfo = state.GetNodeInfo()
+	logger = shared.GetLogger()
 
-	nodeInfo.InitState(selfInfo, leaderInfo)
+	logger.SetNodeName(*serverName)
 
-	jsonState, _ := json.Marshal(nodeInfo)
-	fmt.Println(string(jsonState))
+	nodeInfo.InitState(logger, selfInfo, leaderInfo, serverName)
 }
 
 func main() {
-	if nodeInfo.GetSelf().State != shared.LEADER {
-		res := join.SendJoinRpc(nodeInfo.GetSelf(), nodeInfo.GetLeader())
+	if nodeInfo.GetSelf().State != state.LEADER {
+		res := join.HttpClient{Logger: *logger}.SendJoinRpc(nodeInfo.GetSelf(), nodeInfo.GetLeader())
 
 		if res.Success {
-			nodeInfo = res.NodeInfo
+			nodeInfo = &res.NodeInfo
 		}
 	}
 
-	r := mux.NewRouter();
+	routes := make([]shared.Route, 0)
 
-	r.HandleFunc("/join", join.Controller{NodeInfo: &nodeInfo}.Handler).Methods("POST")
-	r.HandleFunc("/clusterstate", join.Controller{NodeInfo: &nodeInfo}.UpdateStateHandler).Methods("PUT")
-	r.HandleFunc("/request-vote", requestvote.Controller{NodeInfo: nodeInfo}.Handler).Methods("POST")
-	r.HandleFunc("/append-entry", appendentries.Controller{NodeInfo: nodeInfo}.Handler).Methods("POST")
-
-	fmt.Println("routing configured...")
-	listenPort := fmt.Sprintf(":%v", nodeInfo.GetSelf().Port)
-
-	fmt.Println("listening on port", listenPort)
-
-	if err := http.ListenAndServe(listenPort, r); err != nil {
-		log.Fatal(err)
+	for _, route := range join.GetRoutes() {
+		routes = append(routes, route)
 	}
+
+	for _, route := range clusterstate.GetRoutes() {
+		routes = append(routes, route)
+	}
+
+	var router shared.Router
+
+	router.SetRoutes(routes)
+	router.ListenOnPort(nodeInfo.GetSelf().Port)
 }

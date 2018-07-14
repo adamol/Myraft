@@ -2,7 +2,7 @@ package requestvote
 
 import (
 	"net/http"
-	"myraft/shared"
+	"myraft/state"
 )
 
 type RequestVoteRequest struct {
@@ -18,7 +18,7 @@ type RequestVoteReply struct {
 }
 
 type Controller struct {
-	NodeInfo shared.NodeInfo
+	NodeInfo state.NodeInfo
 }
 
 func (c Controller) Handler(w http.ResponseWriter, r *http.Request) {

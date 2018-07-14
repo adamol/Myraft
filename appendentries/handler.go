@@ -2,7 +2,7 @@ package appendentries
 
 import (
 	"net/http"
-	"myraft/shared"
+	"myraft/state"
 )
 
 type AppendEntryRequest struct {
@@ -26,7 +26,7 @@ type LogEntry struct {
 }
 
 type Controller struct {
-	NodeInfo shared.NodeInfo
+	NodeInfo state.NodeInfo
 }
 
 func (c Controller) Handler(w http.ResponseWriter, r *http.Request) {
